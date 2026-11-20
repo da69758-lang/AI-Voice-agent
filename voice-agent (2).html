@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Agent</title>
+<style>
+  :root{
+    --bg:#eef3f1; --panel:#ffffff; --ink:#14231f; --muted:#5d716b;
+    --line:#d3dedb; --accent:#0f766e; --accent-ink:#ffffff;
+    --you:#dff1ee; --bot:#f3f5f4; --warn:#b4341f;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0e1816; --panel:#16241f; --ink:#e6f2ee; --muted:#93aaa3;
+      --line:#2a3d37; --accent:#2dd4bf; --accent-ink:#06201c;
+      --you:#1d3a35; --bot:#1c2c27; --warn:#ff8b73;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.5 Georgia,"Iowan Old Style",serif;min-height:100vh;
+    display:flex;justify-content:center;padding:20px}
+  .app{width:100%;max-width:560px;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:1.5rem;margin:4px 0 0;font-weight:600;letter-spacing:-.01em}
+  .sub{margin:0;color:var(--muted);font-size:.95rem}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}
+  .talk{display:flex;flex-direction:column;align-items:center;gap:14px;padding:26px 16px}
+  #mic{width:132px;height:132px;border-radius:50%;border:0;cursor:pointer;
+    background:var(--accent);color:var(--accent-ink);font:600 1rem system-ui,sans-serif;
+    position:relative;transition:transform .15s}
+  #mic:active{transform:scale(.96)}
+  #mic:focus-visible{outline:3px solid var(--ink);outline-offset:4px}
+  #mic.listening{animation:pulse 1.4s ease-out infinite}
+  #mic.thinking{opacity:.6}
+  #mic.speaking{background:var(--ink);color:var(--bg)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent)}
+    100%{box-shadow:0 0 0 34px transparent}}
+  @media (prefers-reduced-motion:reduce){#mic.listening{animation:none;box-shadow:0 0 0 10px color-mix(in srgb,var(--accent) 40%,transparent)}}
+  #status{font:.9rem system-ui,sans-serif;color:var(--muted);min-height:1.3em;text-align:center}
+  #log{padding:14px;display:flex;flex-direction:column;gap:10px;max-height:300px;overflow-y:auto;min-height:90px}
+  .msg{padding:9px 12px;border-radius:12px;max-width:88%;white-space:pre-wrap}
+  .you{background:var(--you);align-self:flex-end}
+  .bot{background:var(--bot);align-self:flex-start}
+  .empty{color:var(--muted);font-style:italic;margin:auto}
+  details{padding:12px 16px}
+  summary{cursor:pointer;font:600 .95rem system-ui,sans-serif}
+  label{display:block;margin-top:12px;font:.85rem system-ui,sans-serif;color:var(--muted)}
+  input,select{width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--line);
+    border-radius:8px;background:var(--bg);color:var(--ink);font:.95rem system-ui,sans-serif}
+  .row{display:flex;gap:8px}
+  .row>*{flex:1}
+  .typed{display:flex;gap:8px;padding:0 14px 14px}
+  .typed input{margin:0}
+  .typed button{padding:0 16px;border:0;border-radius:8px;background:var(--accent);
+    color:var(--accent-ink);font:600 .9rem system-ui,sans-serif;cursor:pointer}
+  #err{color:var(--warn);font:.9rem system-ui,sans-serif;padding:0 16px 12px;display:none}
+  code{font-size:.85em}
+</style>
+</head>
+<body>
+<main class="app">
+  <div>
+    <h1>Voice agent</h1>
+    <p class="sub">Tap the button, speak, and your n8n workflow answers out loud.</p>
+  </div>
+
+  <section class="panel talk">
+    <button id="mic" aria-label="Start talking">Tap to talk</button>
+    <div id="status" role="status" aria-live="polite">Ready</div>
+  </section>
+
+  <section class="panel">
+    <div id="log" aria-live="polite"><span class="empty">Your conversation will appear here.</span></div>
+    <div id="err"></div>
+    <form class="typed" id="typedForm">
+      <input id="typedInput" placeholder="Or type a message" aria-label="Type a message" autocomplete="off">
+      <button type="submit">Send</button>
+    </form>
+  </section>
+
+  <details class="panel" id="settings" open>
+    <summary>Settings</summary>
+    <label>n8n Production Webhook URL
+      <input id="url" placeholder="https://your-n8n.com/webhook/voice-agent" inputmode="url">
+    </label>
+    <label>Auth header value (optional)
+      <input id="token" placeholder="Sent as the X-Auth-Token header">
+    </label>
+    <div class="row">
+      <label>Speech language
+        <select id="lang">
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="en-IN">English (India)</option>
+          <option value="ur-PK">Urdu</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="ar-SA">Arabic</option>
+          <option value="es-ES">Spanish</option>
+          <option value="fr-FR">French</option>
+        </select>
+      </label>
+      <label>Voice
+        <select id="voice"></select>
+      </label>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center">
+      <input type="checkbox" id="auto" style="width:auto;margin:0" checked>
+      Keep listening after each reply
+    </label>
+    <button type="button" id="newChat" style="margin-top:14px;padding:9px 14px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:600 .9rem system-ui,sans-serif;cursor:pointer">Start new conversation</button>
+    <p class="sub" style="margin-top:12px;font-size:.85rem">
+      Your n8n <b>Webhook</b> node receives JSON
+      <code>{"message","sessionId"}</code> via POST. End the workflow with
+      <b>Respond to Webhook</b> returning <code>{"reply":"..."}</code>.
+      Enable CORS (allowed origins <code>*</code>) in the Webhook node options.
+      Use Chrome or Edge for speech recognition.
+    </p>
+  </details>
+</main>
+
+<script>
+(function(){
+  var $ = function(id){return document.getElementById(id)};
+  var mic=$('mic'), statusEl=$('status'), log=$('log'), errEl=$('err');
+  var urlEl=$('url'), tokenEl=$('token'), langEl=$('lang'), voiceEl=$('voice'), autoEl=$('auto');
+  function newId(){return 'u-'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)}
+  var sessionId=null, history=[];
+  try{sessionId=localStorage.getItem('va_session')}catch(e){}
+  if(!sessionId){sessionId=newId();try{localStorage.setItem('va_session',sessionId)}catch(e){}}
+  try{history=JSON.parse(localStorage.getItem('va_history')||'[]')}catch(e){history=[]}
+  var recog=null, active=false, busy=false;
+
+  // remember settings (safe if storage is blocked)
+  function load(){try{
+    urlEl.value=localStorage.getItem('va_url')||'';
+    tokenEl.value=localStorage.getItem('va_token')||'';
+    langEl.value=localStorage.getItem('va_lang')||'en-US';
+    if(urlEl.value) $('settings').open=false;
+  }catch(e){}}
+  function save(){try{
+    localStorage.setItem('va_url',urlEl.value.trim());
+    localStorage.setItem('va_token',tokenEl.value);
+    localStorage.setItem('va_lang',langEl.value);
+  }catch(e){}}
+  [urlEl,tokenEl,langEl].forEach(function(el){el.addEventListener('change',save)});
+  load();
+
+  function setState(cls,text){
+    mic.className=cls||''; statusEl.textContent=text;
+    mic.textContent = cls==='listening'?'Listening…':cls==='thinking'?'Thinking…':cls==='speaking'?'Tap to stop':'Tap to talk';
+  }
+  function showErr(t){errEl.style.display=t?'block':'none';errEl.textContent=t||''}
+  function addMsg(who,text,skipSave){
+    var e=log.querySelector('.empty'); if(e) e.remove();
+    var d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
+    log.appendChild(d); log.scrollTop=log.scrollHeight;
+    if(!skipSave){
+      history.push({who:who,text:text});
+      try{localStorage.setItem('va_history',JSON.stringify(history.slice(-100)))}catch(e){}
+    }
+  }
+  history.slice().forEach(function(m){addMsg(m.who,m.text,true)});
+
+  $('newChat').addEventListener('click',function(){
+    history=[]; sessionId=newId();
+    try{localStorage.removeItem('va_history');localStorage.setItem('va_session',sessionId)}catch(e){}
+    log.innerHTML='<span class="empty">Your conversation will appear here.</span>';
+    showErr('');
+  });
+
+  // voices
+  function fillVoices(){
+    var vs=speechSynthesis.getVoices(); voiceEl.innerHTML='';
+    var lang=langEl.value.slice(0,2);
+    var list=vs.filter(function(v){return v.lang.indexOf(lang)===0});
+    if(!list.length) list=vs;
+    list.forEach(function(v){var o=document.createElement('option');o.value=v.name;o.textContent=v.name;voiceEl.appendChild(o)});
+  }
+  if('speechSynthesis' in window){speechSynthesis.onvoiceschanged=fillVoices;fillVoices();langEl.addEventListener('change',fillVoices)}
+
+  function speak(text){
+    return new Promise(function(res){
+      if(!('speechSynthesis' in window)) return res();
+      speechSynthesis.cancel();
+      var u=new SpeechSynthesisUtterance(text);
+      u.lang=langEl.value;
+      var v=speechSynthesis.getVoices().filter(function(x){return x.name===voiceEl.value})[0];
+      if(v) u.voice=v;
+      u.onend=u.onerror=function(){res()};
+      setState('speaking','Speaking…');
+      speechSynthesis.speak(u);
+    });
+  }
+
+  async function ask(text){
+    var url=urlEl.value.trim();
+    if(!url){showErr('Add your n8n webhook URL in Settings first.');$('settings').open=true;return}
+    showErr(''); busy=true; addMsg('you',text); setState('thinking','Waiting for n8n…');
+    try{
+      var headers={'Content-Type':'application/json'};
+      if(tokenEl.value) headers['X-Auth-Token']=tokenEl.value;
+      var r=await fetch(url,{method:'POST',headers:headers,
+        body:JSON.stringify({message:text,sessionId:sessionId,language:langEl.value})});
+      if(!r.ok) throw new Error('n8n returned status '+r.status);
+      var raw=await r.text(), reply=raw;
+      try{
+        var j=JSON.parse(raw);
+        if(Array.isArray(j)) j=j[0];
+        reply=j.reply||j.output||j.text||j.message||JSON.stringify(j);
+      }catch(e){}
+      addMsg('bot',reply);
+      await speak(reply);
+    }catch(e){
+      showErr('Could not reach n8n: '+e.message+'. Check the URL, that the workflow is active, and that CORS is enabled.');
+      active=false;
+    }
+    busy=false;
+    if(active && autoEl.checked) listen(); else {active=false;setState('','Ready')}
+  }
+
+  function listen(){
+    var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){showErr('Speech recognition is not supported here. Use Chrome or Edge, or type your message.');active=false;return}
+    recog=new SR(); recog.lang=langEl.value; recog.interimResults=false; recog.maxAlternatives=1;
+    var got=false;
+    recog.onstart=function(){setState('listening','Listening…')};
+    recog.onresult=function(ev){got=true;var t=ev.results[0][0].transcript.trim();if(t) ask(t)};
+    recog.onerror=function(ev){
+      if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){
+        showErr('Microphone access was blocked. Allow it in the browser address bar and reload.');active=false;
+      }
+    };
+    recog.onend=function(){
+      if(!got && !busy){
+        if(active && autoEl.checked) setTimeout(listen,300); else {active=false;setState('','Ready')}
+      }
+    };
+    try{recog.start()}catch(e){}
+  }
+
+  mic.addEventListener('click',function(){
+    if(active||busy||speechSynthesis.speaking){
+      active=false; busy=false;
+      if(recog) try{recog.abort()}catch(e){}
+      speechSynthesis.cancel(); setState('','Ready'); return;
+    }
+    showErr(''); active=true; listen();
+  });
+
+  $('typedForm').addEventListener('submit',function(e){
+    e.preventDefault();
+    var t=$('typedInput').value.trim(); if(!t||busy) return;
+    $('typedInput').value=''; active=false; ask(t);
+  });
+})();
+</script>
+</body>
+</html>

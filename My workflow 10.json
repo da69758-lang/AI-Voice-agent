@@ -1,0 +1,163 @@
+{
+  "name": "My workflow 10",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-agent",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "http://localhost:8000"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6569b6f3-c28c-4e46-b02e-c7b51c27f50c",
+      "name": "Webhook",
+      "webhookId": "7009e9d5-bed3-4153-85c3-75efe68d381c",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "DDMMKRin4eA4h9in",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.message }}",
+        "options": {
+          "systemMessage": "You are Sara, a friendly voice assistant for IT Services.\nYour replies are spoken aloud, so:\n- Answer in 1 to 2 short sentences.\n- Never use lists, markdown, emojis, or symbols.\n- If you don't know something, say so and offer to take a message.\n\nBusiness facts:\n- Open Monday to Saturday, 9 AM to 6 PM. Closed Sunday.\n- Address: UET Taxila"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "c0861bbd-1b24-46ca-95f4-4ad05e6aef3d",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        208
+      ],
+      "id": "022ccc75-bf95-4481-bafd-7c96781c0290",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "jT6HSX7I4zPpKgHI",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Webhook').item.json.body.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        224,
+        208
+      ],
+      "id": "f7cf72a4-74fe-4ea0-8dd6-77b61ce90096",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "W9m9VdPky49ClvCi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reply: $json.output }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        560,
+        0
+      ],
+      "id": "39769376-cb0f-4731-93b4-d449450f9e94",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a5d64acf-847e-40b4-821a-88e00c0564fb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "46c38d0665e1fce7aad28b1e5c5031194228d6f684edb9f574886d1219617fb3"
+  },
+  "nodeGroups": [],
+  "id": "EbzgNUDOh2OlanEz",
+  "tags": []
+}
